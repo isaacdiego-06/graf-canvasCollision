@@ -1,188 +1,220 @@
 
 const canvas = document.getElementById("canvas");
-let ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d");
+const CANTIDAD = 25, RADIO = 17;
+let circulos = [], contador = 0, velocidadActual = 1, nivelVelocidad = "Inicial";
 
-const window_height = window.innerHeight;
-const window_width = window.innerWidth;
+document.body.style.cssText = "margin:0;overflow:hidden";
+canvas.style.cssText = "position:fixed;inset:0;width:100vw;height:100vh;display:block;cursor:pointer";
 
-canvas.height = window_height;
-canvas.width = window_width;
-canvas.style.background = "#ff8";
+function ajustarCanvas() {
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+}
+ajustarCanvas();
+window.addEventListener("resize", ajustarCanvas);
 
-class Circle {
-    constructor(x, y, radius, color, text, speed) {
-        this.posX = x;
-        this.posY = y;
-        this.radius = radius;
-
-        this.colorOriginal = color;
-        this.color = color;
-        this.colorChoqueHasta = 0;
-        this.text = text;
-        this.speed = speed;
-
-        this.dx = 1 * this.speed;
-        this.dy = 1 * this.speed;
-    }
-
-    draw(context) {
-        context.beginPath();
-
-        context.strokeStyle = this.color;
-        context.fillStyle = this.color;
-        context.textAlign = "center";
-        context.textBaseline = "middle";
-        context.font = "20px Arial";
-
-        context.fillText(this.text, this.posX, this.posY);
-
-        context.lineWidth = 2;
-        context.arc(
-            this.posX,
-            this.posY,
-            this.radius,
-            0,
-            Math.PI * 2,
-            false
-        );
-
-        context.stroke();
-        context.closePath();
-    }
-
-    update() {
-        // Actualizar posición horizontal
-        this.posX += this.dx;
-
-        // Rebote en los bordes horizontales
-        if (this.posX + this.radius > window_width) {
-            this.posX = window_width - this.radius;
-            this.dx = -Math.abs(this.dx);
-        } else if (this.posX - this.radius < 0) {
-            this.posX = this.radius;
-            this.dx = Math.abs(this.dx);
-        }
-
-        // Actualizar posición vertical
-        this.posY += this.dy;
-
-        // Rebote en los bordes verticales
-        if (this.posY + this.radius > window_height) {
-            this.posY = window_height - this.radius;
-            this.dy = -Math.abs(this.dy);
-        } else if (this.posY - this.radius < 0) {
-            this.posY = this.radius;
-            this.dy = Math.abs(this.dy);
-        }
-    }
+function crearCirculo(inicial = false) {
+    return {
+        x: RADIO + Math.random() * (canvas.width - RADIO * 2),
+        y: inicial ? RADIO + Math.random() * canvas.height * 0.65 : -RADIO,
+        radio: RADIO,
+        vx: (Math.random() - 0.5) * 2,
+        vy: 0.5 + Math.random() * 0.8,
+        gravedad: 0.08 + Math.random() * 0.04,
+        rebote: 0.45 + Math.random() * 0.15,
+        rotacion: Math.random() * Math.PI,
+        giro: (Math.random() - 0.5) * 0.05,
+        tiempoLimite: Date.now() + 5000
+    };
 }
 
-// Crear array de círculos
-let circles = [];
+for (let i = 0; i < CANTIDAD; i++) {
+    circulos.push({
+        ...crearCirculo(),
+        y: -RADIO,
+        activo: false,
+        aparicion: Date.now() + i * 350
+    });
+}
 
-// Generar círculos aleatorios
-function generateCircles(n) {
+function actualizarVelocidad() {
+    velocidadActual = contador > 20 ? 2.5 : contador > 10 ? 1.7 : 1;
+    nivelVelocidad = contador > 20 ? "Alta" : contador > 10 ? "Media" : "Inicial";
+}
+
+function dibujarCancha() {
+    const w = canvas.width, h = canvas.height, m = Math.min(25, w * 0.02);
+
+    ctx.fillStyle = "#21852d";
+    ctx.fillRect(0, 0, w, h);
+
+    for (let i = 0; i < 10; i++) {
+        ctx.fillStyle = i % 2 ? "rgba(130,210,65,.10)" : "rgba(0,65,10,.13)";
+        ctx.fillRect(i * w / 10, 0, w / 10, h);
+    }
+
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(m, m, w - 2 * m, h - 2 * m);
+
+    ctx.beginPath();
+    ctx.moveTo(w / 2, m);
+    ctx.lineTo(w / 2, h - m);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, Math.min(w, h) * 0.14, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const aw = w * 0.12, ah = h * 0.38, ay = (h - ah) / 2;
+    ctx.strokeRect(m, ay, aw, ah);
+    ctx.strokeRect(w - m - aw, ay, aw, ah);
+    ctx.strokeRect(m, h * 0.39, aw * 0.4, h * 0.22);
+    ctx.strokeRect(w - m - aw * 0.4, h * 0.39, aw * 0.4, h * 0.22);
+}
+
+function poligono(x, y, r, n, giro = 0) {
+    ctx.beginPath();
     for (let i = 0; i < n; i++) {
-        let radius = Math.random() * 30 + 20;
-
-        let x = Math.random() * (window_width - radius * 2) + radius;
-        let y = Math.random() * (window_height - radius * 2) + radius;
-
-        let color = `#${Math.floor(Math.random() * 16777215)
-            .toString(16).padStart(6, "0")}`;
-
-        let speed = Math.random() * 1 + 1;
-        let text = `C${i + 1}`;
-
-        circles.push(
-            new Circle(x, y, radius, color, text, speed)
-        );
+        const a = giro + i * Math.PI * 2 / n;
+        const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+        i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
     }
+    ctx.closePath();
+    ctx.fill();
 }
 
-// Detectar colisiones y hacer rebotar los círculos
+function dibujarBalon(c) {
+    const r = c.radio;
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.rotate(c.rotacion);
 
-function detectarColisiones() {
-    const ahora = performance.now();
+    ctx.beginPath();
+    ctx.ellipse(3, r * 0.8, r * 0.95, r * 0.3, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0,0,0,.25)";
+    ctx.fill();
 
-    // Restaurar color cuando termina el destello
-    circles.forEach(circle => {
-        circle.color = ahora < circle.colorChoqueHasta
-            ? "#0000FF"
-            : circle.colorOriginal;
-    });
+    const g = ctx.createRadialGradient(-r * 0.35, -r * 0.4, 1, 0, 0, r * 1.2);
+    g.addColorStop(0, "white");
+    g.addColorStop(0.7, "#eee");
+    g.addColorStop(1, "#777");
 
-    for (let i = 0; i < circles.length; i++) {
-        for (let j = i + 1; j < circles.length; j++) {
-            const c1 = circles[i];
-            const c2 = circles[j];
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fillStyle = g;
+    ctx.fill();
 
-            const dx = c2.posX - c1.posX;
-            const dy = c2.posY - c1.posY;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.94, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = "#171717";
+    poligono(0, 0, r * 0.34, 5);
 
-            const distancia = Math.sqrt(dx * dx + dy * dy);
-            const sumaRadios = c1.radius + c2.radius;
+    for (let i = 0; i < 5; i++) {
+        const a = i * Math.PI * 2 / 5 - Math.PI / 2;
+        poligono(Math.cos(a) * r * 0.77, Math.sin(a) * r * 0.77, r * 0.23, 5, a);
+    }
+    ctx.restore();
 
-            if (distancia <= sumaRadios) {
-                // Destello azul visible durante 180 ms
-                c1.colorChoqueHasta = ahora + 180;
-                c2.colorChoqueHasta = ahora + 180;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.strokeStyle = "#555";
+    ctx.stroke();
+    ctx.restore();
+}
 
-                c1.color = "#0000FF";
-                c2.color = "#0000FF";
+function reemplazarBalon(i) {
+    circulos[i] = {
+        ...crearCirculo(),
+        y: -RADIO,
+        activo: false,
+        aparicion: Date.now() + 500 + Math.random() * 900
+    };
+}
 
-                // Dirección normal del choque
-                const nx = distancia === 0 ? 1 : dx / distancia;
-                const ny = distancia === 0 ? 0 : dy / distancia;
+function actualizar() {
+    const ahora = Date.now();
 
-                // Separar los círculos para evitar que se encimen
-                const traslape = sumaRadios - distancia;
+    for (let i = 0; i < circulos.length; i++) {
+        const c = circulos[i];
 
-                c1.posX -= nx * (traslape / 2 + 0.1);
-                c1.posY -= ny * (traslape / 2 + 0.1);
+        if (!c.activo) {
+            if (ahora >= c.aparicion) {
+                c.activo = true;
+                c.tiempoLimite = ahora + 5000;
+            } else continue;
+        }
 
-                c2.posX += nx * (traslape / 2 + 0.1);
-                c2.posY += ny * (traslape / 2 + 0.1);
+        if (ahora >= c.tiempoLimite) {
+            reemplazarBalon(i);
+            continue;
+        }
 
-                // Calcular velocidad relativa en la dirección del choque
-                const velocidadRelativa =
-                    (c2.dx - c1.dx) * nx +
-                    (c2.dy - c1.dy) * ny;
+        c.vy += c.gravedad * velocidadActual;
+        c.x += c.vx * velocidadActual;
+        c.y += c.vy * velocidadActual;
+        c.rotacion += c.giro * velocidadActual;
 
-                // Rebotar únicamente si se están acercando
-                if (velocidadRelativa < 0) {
-                    c1.dx += velocidadRelativa * nx;
-                    c1.dy += velocidadRelativa * ny;
-
-                    c2.dx -= velocidadRelativa * nx;
-                    c2.dy -= velocidadRelativa * ny;
-                }
-            }
+        if (c.x + RADIO >= canvas.width) {
+            c.x = canvas.width - RADIO;
+            c.vx = -Math.abs(c.vx);
+        }
+        if (c.x - RADIO <= 0) {
+            c.x = RADIO;
+            c.vx = Math.abs(c.vx);
+        }
+        if (c.y + RADIO >= canvas.height) {
+            c.y = canvas.height - RADIO;
+            c.vy = -Math.abs(c.vy) * c.rebote;
+        }
+        if (c.y + RADIO >= canvas.height - 1 && Math.abs(c.vy) < 1) {
+            c.y = canvas.height - RADIO;
+            c.vy = -1.5;
         }
     }
 }
 
-
-// Animación
-function animate() {
-    ctx.clearRect(0, 0, window_width, window_height);
-
-    // Primero mover los círculos
-    circles.forEach(circle => {
-        circle.update();
-    });
-
-    // Después detectar colisiones y cambiar direcciones
-    detectarColisiones();
-
-    // Dibujar con el color correspondiente
-    circles.forEach(circle => {
-        circle.draw(ctx);
-    });
-
-    requestAnimationFrame(animate);
+function dibujarMarcador() {
+    const x = canvas.width - 245, y = 20;
+    ctx.fillStyle = "rgba(8,25,12,.9)";
+    ctx.beginPath();
+    ctx.roundRect(x, y, 225, 82, 14);
+    ctx.fill();
+    ctx.fillStyle = "white";
+    ctx.textAlign = "left";
+    ctx.font = "bold 19px Arial";
+    ctx.fillText(`⚽ Puntos: ${contador}`, x + 15, y + 31);
+    ctx.font = "15px Arial";
+    ctx.fillText(`Velocidad: ${nivelVelocidad}`, x + 15, y + 59);
 }
 
-// Iniciar simulación
-generateCircles(20);
-animate();
+canvas.addEventListener("click", e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+    for (let i = circulos.length - 1; i >= 0; i--) {
+        const c = circulos[i], dx = mx - c.x, dy = my - c.y;
+        if (c.activo && dx * dx + dy * dy <= c.radio * c.radio) {
+            contador++;
+            actualizarVelocidad();
+            reemplazarBalon(i);
+            break;
+        }
+    }
+});
+
+function animar() {
+    actualizar();
+    dibujarCancha();
+    circulos.forEach(c => {
+        if (c.activo) dibujarBalon(c);
+    });
+    dibujarMarcador();
+    requestAnimationFrame(animar);
+}
+
+actualizarVelocidad();
+animar();
